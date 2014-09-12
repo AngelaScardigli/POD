@@ -34,13 +34,16 @@ class POD {
 	public:
 	    int dsize;
 	    int nfields;
-	    vector<T> calc_mean(const bool &, const int &);
+	    vector<T> mean;
+	    vector<T> calc_mean(const bool &);
+	    void calc_modes(const bool &);
 	protected:
 	    POD();
 	    POD(int &, int &);
 	    T1 job();
-	    //void get_fields(int, string, vector<T> &);
-
+	    //void calc_coefficients();
+	    void calc_correlation(vector<vector<T>> &);
+	    void inner_product(vector<T> &, vector<T> &, vector<double> &);
 
 };
 
@@ -48,9 +51,15 @@ template <class T>
 class interface : public POD< T, interface<T> > {
 	friend class POD<interface, T>;
 	public:
+		int nsnap;
+		int nmode;
+		int dimension;
+		string flag;
 		vector<T> input;
 		interface();
 		interface(vector<T> &);
+		interface(vector<T> &, int &, int &);
+		interface(vector<T> &, int &, int &, string);		
 	    	void get_fields(int, string, vector<T> &);
 
 };
