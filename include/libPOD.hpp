@@ -11,6 +11,7 @@
 # include <iomanip>
 # include <iostream>
 # include <algorithm>
+# include <lapacke.h>
 
 // CC_lib
 # include "Operators.hpp"
@@ -33,15 +34,20 @@ template <class T, class T1>
 class POD {
 	public:
 	    int dsize;
-	    int nfields;
+	    int npod;
+	    int frows;
+	    int ftype;
 	    vector<T> mean;
+	    vector<vector<double>> lambda;
+	    vector<vector<vector<double>>> coeff;
 	    vector<T> calc_mean(const bool &);
 	    void calc_modes(const bool &);
+	    void calc_projection_matrix(const bool &);
 	protected:
 	    POD();
-	    POD(int &, int &);
+	    //POD(int &, int &);
 	    T1 job();
-	    //void calc_coefficients();
+	    void calc_coefficients();
 	    void calc_correlation(vector<vector<vector<double>>> &);
 	    void inner_product(vector<T> &, vector<T> &, vector<double> &);
 
@@ -60,7 +66,13 @@ class interface : public POD< T, interface<T> > {
 		interface(vector<T> &);
 		interface(vector<T> &, int &, int &);
 		interface(vector<T> &, int &, int &, string);		
-	    	void get_fields(int, string, vector<T> &);
+	    	void get_fields(int &, string, vector<T> &);
+	    	void get_input(vector<T> &, string);
+	    	void get_input(vector<vector<T>> &, string);
+	    	void give_fields(int &, string, vector<T> &);
+	    	void give_output(vector<T> &, string);
+	    	void give_output(vector<vector<T>> &, string);
+
 
 };
 
