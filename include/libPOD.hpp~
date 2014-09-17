@@ -18,37 +18,35 @@
 
 using namespace std;
 
-/*template <class T>
-class POD {
-	public:
-	    int dsize;
-	    int nfields;
-	    vector<T> input;
-	    POD();
-	    POD(int &, int &);
-	    vector<T> calc_mean(const bool &, const int &);
-	    //virtual void get_fields(int, string, vector<T> &);
-};*/
-
 template <class T, class T1>
 class POD {
 	public:
 	    int dsize;
 	    int npod;
-	    int frows;
-	    int ftype;
+	    vector<T> volume;
+	    vector<T> filter;
 	    vector<T> mean;
 	    vector<vector<double>> lambda;
 	    vector<vector<vector<double>>> coeff;
+	    vector<vector<T>> phi;
 	    vector<T> calc_mean(const bool &);
 	    void calc_modes(const bool &);
+	    void calc_projection_matrix(const bool &);
+	    void calc_reconstruction(const bool &);
 	protected:
 	    POD();
-	    //POD(int &, int &);
 	    T1 job();
 	    void calc_coefficients();
 	    void calc_correlation(vector<vector<vector<double>>> &);
-	    void inner_product(vector<T> &, vector<T> &, vector<double> &);
+	    vector<double> inner_product(vector<vector<double>> &, vector<vector<double>> &);
+	    vector<double> inner_product(vector<vector<vector<double>>> &, vector<vector<vector<double>>> &);
+	    vector<vector<vector<double>>> ass_proj_matrix(vector<vector<double>> &);
+	    vector<vector<vector<double>>> ass_proj_matrix(vector<vector<vector<double>>> &);
+	    vector<vector<T>> ass_phi(vector<vector<double>> &);
+	    vector<vector<T>> ass_phi(vector<vector<vector<double>>> &);
+	    vector<vector<double>> project(vector<vector<double>> &);
+	    vector<vector<double>> project(vector<vector<vector<double>>> &);
+	    void reconstruct(vector<vector<double>> &, vector<T> &);
 
 };
 
@@ -58,17 +56,16 @@ class interface : public POD< T, interface<T> > {
 	public:
 		int nsnap;
 		int nmode;
-		int dimension;
-		string flag;
+		int nrecon;
+		int npod;
 		vector<T> input;
-		interface();
-		interface(vector<T> &);
 		interface(vector<T> &, int &, int &);
-		interface(vector<T> &, int &, int &, string);		
+		interface(vector<T> &, int &, int &, int &);		
 	    	void get_fields(int &, string, vector<T> &);
 	    	void get_input(vector<T> &, string);
 	    	void get_input(vector<vector<T>> &, string);
 	    	void give_fields(int &, string, vector<T> &);
+	    	void give_output(vector<double> &, string);
 	    	void give_output(vector<T> &, string);
 	    	void give_output(vector<vector<T>> &, string);
 

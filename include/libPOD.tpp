@@ -2,12 +2,6 @@ template <class T, class T1>
 POD <T, T1>::POD(){
 }
 
-/*template <class T, class T1>
-POD <T, T1>::POD(int &mysize, int &myfields){
-    dsize=mysize;
-    nfields=myfields;
-}*/
-
 template <class T, class T1>
 T1 POD <T, T1>::job(){
 	return *static_cast<T1*>(this);
@@ -21,7 +15,6 @@ T1 POD <T, T1>::job(){
 template <class T, class T1>
 vector<T> POD<T, T1>::calc_mean(const bool &tf){
 
-    //vector< T >    mean;
     vector< T >	   snap;
     int fi = 0;
 
@@ -46,15 +39,8 @@ vector<T> POD<T, T1>::calc_mean(const bool &tf){
 	job().get_fields(fi,"mean", mean);
     }
 
-    if (job().flag.compare("vectorial")==0){
-	ftype=3;
-    }
-    else {
-	ftype=1;
-    }
+    dsize=mean.size();
 
-    dsize=mean.size()/ftype;
-    frows=mean.size();
     return (mean); 
 
 }
@@ -66,15 +52,10 @@ vector<T> POD<T, T1>::calc_mean(const bool &tf){
 template <class T, class T1>
 void POD<T, T1>::calc_modes(const bool &tf){
    
-    int ft=0;
-    vector<T> filter;
-    vector<T> volume;
-    vector<T> s1;
-    vector<T> s2;
-    vector<T> val;
+    int i0=0;
+    vector<vector<vector<double>>> Mcorr;
+    vector<T> help;
     vector<T> mode;
-    vector<vector<vector<double>>> phi;
-    vector<vector<double>> help; 
   
     if (job().nmode<job().nsnap){
 	npod=job().nmode;
@@ -83,33 +64,22 @@ void POD<T, T1>::calc_modes(const bool &tf){
 	npod=job().nsnap-1;
     }
 
-    help.resize(frows,vector<double>(mean[0].size(),0.0));    
-    phi.resize(frows,vector<vector<double>>(npod,vector<double>(mean[0].size(),0.0)));  
+
+    job().get_fields(i0,"filter",filter);
+    job().get_fields(i0,"volume",volume);
 
     if (tf == 1){
 
-	job().get_fields(ft,"filter",filter);
-	
+
 	//solve eigenproblem
 	calc_coefficients();
+	phi=ass_phi(filter);
 
-	for (int i=0; i<job().nsnap; ++i){
-	    cout << "projecting snapshot " << i+1 << " of " << job().nsnap << endl;
-	    job().get_fields(i,"snap",s1);
-	    val=s1-mean;
+	help=mean*0.0;
 
-	    for (int j=0; j<npod; ++j){
-		for (int n=0; n<frows; ++n){
-			phi[n][j]=phi[n][j]+((val[n]*filter[0])*coeff[n/ftype][j][i])/abs(lambda[n/ftype][j]);
-			
-		}
-
-	    }	
-	    
-	}
 	for (int pd=0; pd<npod; ++pd){
-	    for (int n=0; n<frows; ++n){
-		help[n]=phi[n][pd];
+	    for (int d=0; d<dsize; ++d){
+		help[d]=phi[pd][d];
 	    }
 
 	    job().give_fields(pd,"modes",help);
@@ -117,16 +87,74 @@ void POD<T, T1>::calc_modes(const bool &tf){
     }
     else {
 	for ( int pd=0; pd<npod; ++pd){
-	    for (int n=0; n<frows; ++n){
-		job().get_fields(pd,"mode",mode);
-		phi[n][pd]=mode[n];
-	    }
+	for (int d=0; d<dsize; ++d){
+	    job().get_fields(pd,"mode",mode);
+	    phi[pd][d]=mode[d];
 	}
+	}
+
 	job().get_input(coeff,"coefficients");
 	job().get_input(lambda,"lambda");
     }
 	
 }
+
+// ass_phi 2D ======================================================================= //
+
+template <class T, class T1>
+vector<vector<T>> POD <T , T1>::ass_phi(vector<vector<double>> &in){
+
+	vector<T> s1;
+	vector<T> val;
+	vector<vector<T>> mphi;
+	mphi.resize(npod,vector<vector<double>>(dsize,vector<double>(in[0].size(),0.0)));
+
+	for (int i=0; i<job().nsnap; ++i){
+	    cout << "projecting snapshot " << i+1 << " of " << job().nsnap << endl;
+	    job().get_fields(i,"snap",s1);
+	    val=s1-mean;
+
+	    for (int j=0; j<npod; ++j){
+	    for (int d=0; d<dsize; ++d){
+	    for (int n=0; n<filter[0].size(); ++n)
+		if (filter[0][n]==1){
+		    mphi[j][d][n]=mphi[j][d][n]+((val[d][n]*filter[0][n])*coeff[d][j][i])/abs(lambda[d][j]);
+		}	
+	    }
+	    } 
+	}
+
+	return(mphi);
+} 
+
+// ass_phi 3D ======================================================================= //
+
+template <class T, class T1>
+vector<vector<T>> POD <T , T1>::ass_phi(vector<vector<vector<double>>> &in){
+
+	vector<T> s1;
+	vector<T> val;
+	vector<vector<T>> mphi;
+	mphi.resize(npod,vector<vector<vector<double>>>(dsize,vector<vector<double>>(in[0].size(),vector<double>(in[0][0].size(),0.0))));
+
+	for (int i=0; i<job().nsnap; ++i){
+	    cout << "projecting snapshot " << i+1 << " of " << job().nsnap << endl;
+	    job().get_fields(i,"snap",s1);
+	    val=s1-mean;
+
+	    for (int j=0; j<npod; ++j){
+	    for (int d=0; d<dsize; ++d){
+	    for (int n=0; n<filter[0].size; ++n){
+		if (filter[0][n][0]==1){
+		    mphi[j][d][n]=mphi[j][d][n]+((val[d][n]*filter[0][n])*coeff[d][j][i])/abs(lambda[d][j]);
+		}	
+	    }
+	    }
+	    } 
+	}
+
+	return(mphi);
+} 
 
 // calc coefficients ================================================================ //
 
@@ -166,11 +194,12 @@ void POD <T , T1>::calc_coefficients(){
 	    }
 
 	    for (int t=0; t<job().nsnap; ++t){
-		for ( int m=0; m<npod; ++m){
-			
+	    for ( int m=0; m<npod; ++m){
+		
+		    Mcorr_reduce[i][t][job().nsnap-m-1]=Marr[t][job().nsnap-m-1];	
 		    coeff[i][m][t]= Mcorr_reduce[i][t][job().nsnap-m-1]*sqrt(abs(lambda[i][m]));
 	
-		}
+	    }
 	    }
 
 	}
@@ -195,13 +224,13 @@ void POD <T, T1>::calc_correlation(vector<vector<vector<double>>> &Mcorr){
 	    cout << "row number " << i+1 << " of " << job().nsnap << endl;
 	    job().get_fields(i,"snap",snap1);
 	    snap1=snap1-mean;
-	
+
 	    for (int j=i; j<job().nsnap; ++j){
 
 		job().get_fields(j,"snap",snap2);
 		snap2=snap2-mean;
 
-		inner_product(snap1, snap2, corr);
+		corr=inner_product(snap1, snap2);
 		
 		for (int k=0; k<dsize; ++k){
 
@@ -212,47 +241,50 @@ void POD <T, T1>::calc_correlation(vector<vector<vector<double>>> &Mcorr){
 	    }
 
 	}
-
 }
 
-// inner product ==================================================================== //
+// inner product 2D ================================================================= //
 
 template <class T, class T1>
-void POD <T, T1>::inner_product(vector<T> &s1, vector<T> &s2, vector<double> &corr){
-	vector<T> filter;
-	vector<T> volume;
-	vector<T> factor;
-	double corr1;
-	int fi=0;
+vector<double> POD <T, T1>::inner_product(vector<vector<double>> &s1, vector<vector<double>> &s2){
+
+	vector<double> corr;
 	corr.resize(dsize,0.0);
 
-	job().get_fields(fi,"filter",filter);
-	job().get_fields(fi,"volume",volume);
+	for (int d=0; d<dsize; ++d){	
+	for (int n=0; n<filter[0].size(); ++n){
+	    if (filter[0][n]==1){
 
-	if (job().flag.compare("vectorial")==0){
+		corr[d]=corr[d]+(s1[d][n]*s2[d][n]*volume[0][n]);
 
-	    for (int i=0; i<dsize; ++i)
-	    {
-		sum((Dot_Product(s1[0+3*i],s2[0+3*i])+Dot_Product(s1[1+3*i],s2[1+3*i])+Dot_Product(s1[2+3*i],s2[2+3*i]))*volume,corr1);
-		corr[i]=corr1;
 	    }
-
 	}
-	else {
-
-	    vector<T> vcorr=s1*s2; 
-	    vector<T> vfactor=volume*filter;
-
-	    for (int i=0; i<dsize; ++i){
-
-		vcorr[i]=vcorr[i]*vfactor[0];
-		sum(vcorr[i],corr1);
-		corr[i]=corr1;
-	    }
-
 	}
 
+	return(corr);
 }
+
+// inner product 3D ================================================================= //
+
+template <class T, class T1>
+vector<double> POD <T, T1>::inner_product(vector<vector<vector<double>>> &s1, vector<vector<vector<double>>> &s2){
+
+	vector<double> corr; 
+	corr.resize(dsize,0.0);
+
+	for (int d=0; d<dsize; ++d){	
+	for (int n=0; n<filter[0].size(); ++n){
+	    if (filter[0][n][0]==1){
+
+		corr[d]=corr[d]+Dot_Product(s1[d][n],s2[d][n])*volume[0][n][0];
+
+	    }
+	}
+	}
+
+	return(corr);
+}
+
 
 // ================================================================================== //
 // CALC PROJECTION MATRIX                                                             //
@@ -260,18 +292,193 @@ void POD <T, T1>::inner_product(vector<T> &s1, vector<T> &s2, vector<double> &co
 
 template <class T, class T1>
 void POD<T, T1>::calc_projection_matrix(const bool &tf){
-	
-	lapack_int info, n, ipiv;
+
+	//vector<T> filter;
+	//vector<T> volume;
+	vector<vector<vector<double>>> proj_mat;
+	vector<vector<vector<double>>> proj_mat_reduce;
+	lapack_int info, n;
 	n=npod;
 	
-	double mat[dsize][npod][npod];
+	double mat[npod][npod];
 	double idty[npod][npod];
-	//lapack_int ipiv[npod];
-	
+	int ipiv[npod];
+
 	if (tf==1){
+
+	    proj_mat=ass_proj_matrix(volume);
+	    proj_mat_reduce=proj_mat;
 	    
-		//info = LAPACKE_dgesv(LAPACK_ROW_MAJOR, npod, npod, "double* mat", npod,"lapack_int* ipiv", "double* b", npod);
+	    for (int d=0; d<dsize; ++d){
+		for (int i=0; i<npod; ++i){
+		    idty[i][i]=1.0;
+		for (int j=0; j<npod; ++j){
+		    mat[i][j]=proj_mat_reduce[d][i][j];
+		}
+		}
+		
+		info = LAPACKE_dgesv(LAPACK_ROW_MAJOR, npod, npod, *mat, npod, ipiv, *idty, npod);
+
+		for (int i=0; i<npod; ++i){
+		for (int j=0; j<npod; ++j){
+
+		    proj_mat[d][i][j]=idty[i][j];
+
+		}
+		}
+
+		job().give_output(proj_mat[d],"proj_matrix");
+
+	    }
+	    
 
 	}
 
 }
+
+// ass_proj_matrix 2D =============================================================== //
+
+template <class T, class T1>
+vector<vector<vector<double>>> POD <T, T1>::ass_proj_matrix(vector<vector<double>> &s0){
+
+	vector<vector<vector<double>>> proj_mat;
+	proj_mat.resize(dsize,vector<vector<double>>(npod,vector<double>(npod,0.0)));
+
+	for (int n=0; n<filter[0].size(); ++n){
+	    if (filter[0][n]==1){
+		for (int i=0; i<npod; ++i){
+		for (int j=0; j<npod; ++j){
+		for (int d=0; d<dsize; ++d){
+		    proj_mat[d][i][j]=proj_mat[d][i][j]+phi[i][d][n]*phi[j][d][n]*volume[0][n];				
+		}
+		}
+		}
+	    }
+	}
+
+	return(proj_mat);
+}
+
+// ass_proj_matrix 3D =============================================================== //
+
+template <class T, class T1>
+vector<vector<vector<double>>> POD <T, T1>::ass_proj_matrix(vector<vector<vector<double>>> &s0){
+
+	vector<vector<vector<double>>> proj_mat;
+	proj_mat.resize(dsize,vector<vector<double>>(npod,vector<double>(npod,0.0)));
+
+	for (int n=0; n<filter[0].size(); ++n){
+	    if (filter[0][n][0]==1){
+		for (int i=0; i<npod; ++i){
+		for (int j=0; j<npod; ++j){
+		for (int d=0; d<dsize; ++d){
+		    proj_mat[d][i][j]=proj_mat[d][i][j]+Dot_Product(phi[i][d][n],phi[j][d][n])*volume[0][n];				
+		}
+		}
+		}
+	    }
+	}
+
+	return(proj_mat);
+}
+
+// ================================================================================== //
+// CALC RECONSTRUCTION								      //
+// ================================================================================== //
+
+template <class T, class T1>
+void POD<T, T1>::calc_reconstruction(const bool &tf){
+
+	vector<T> snapo;
+	vector<T> snapr;
+	vector<vector<double>> coeff_pod;
+	coeff_pod.resize(dsize,vector<double>(npod,0.0));
+	int rs=job().nrecon;
+
+	job().get_fields(rs,"snap",snapo);
+	snapo=snapo-mean;
+
+	coeff_pod=project(snapo);
+
+	for (int d=0; d<dsize; ++d){
+
+		job().give_output(coeff_pod[d],"coeff pod");	
+		
+	}
+
+	snapr=mean*0.0;
+	reconstruct(coeff_pod,snapr);
+	snapr=snapr+mean;
+	job().give_fields(rs,"reconstruction",snapr);	
+
+}
+
+// project 2D ======================================================================= //
+
+template <class T, class T1>
+vector<vector<double>> POD<T, T1>::project(vector<vector<double>> &so){
+
+	vector<vector<double>> coeff_pod;
+	vector<vector<double>> coeff_myid;
+	coeff_pod.resize(dsize,vector<double>(npod,0.0));
+	coeff_myid.resize(dsize,vector<double>(npod,0.0));
+
+	for (int d=0; d<dsize; ++d){
+	for (int n=0; n<filter[0].size(); ++n)
+	{
+	   if (filter[0][n]==1){
+		for (int i=0; i<npod; ++i){
+		    coeff_myid[d][i]=coeff_myid[d][i]+so[d][n]*phi[i][d][n]*volume[0][n];
+		}
+	   }
+	}	    
+	}
+
+	coeff_pod=coeff_myid;
+	return(coeff_pod);
+}
+
+// project 3D ======================================================================= //
+
+template <class T, class T1>
+vector<vector<double>> POD<T, T1>::project(vector<vector<vector<double>>> &so){
+
+	vector<vector<double>> coeff_pod;
+	vector<vector<double>> coeff_myid;
+	coeff_pod.resize(dsize,vector<double>(npod,0.0));
+	coeff_myid.resize(dsize,vector<double>(npod,0.0));
+
+	for (int d=0; d<dsize; ++d){
+	for (int n=0; n<filter[0].size(); ++n)
+	{
+	   if (filter[0][n][0]==1){
+		for (int i=0; i<npod; ++i){
+		    coeff_myid[d][i]=coeff_myid[d][i]+Dot_Product(so[d][n],phi[i][d][n])*volume[0][n][0];
+		}
+	   }
+	}	    
+	}
+
+	coeff_pod=coeff_myid;
+	return(coeff_pod);
+}
+
+// reconstruct ======================================================================= //
+
+template <class T, class T1>
+void POD<T, T1>::reconstruct(vector<vector<double>> &cpod, vector<T> &sr){
+
+	for (int d=0; d<dsize; ++d){
+	for (int i=0; i<npod; ++i){
+	for (int n=0; n<filter[0].size(); ++n){
+	    if (filter[0][n]==1){
+		sr[d][n]=sr[d][n]+cpod[d][i]*phi[i][d][n];
+	    }
+	}
+	}	
+	}
+
+}
+
+
+
