@@ -311,10 +311,12 @@ void POD<T, T1>::calc_projection_matrix(const bool &tf){
 	    
 	    for (int d=0; d<dsize; ++d){
 		for (int i=0; i<npod; ++i){
-		    idty[i][i]=1.0;
 		for (int j=0; j<npod; ++j){
+		    mat[i][j]=0.0;
+		    idty[i][j]=0.0;
 		    mat[i][j]=proj_mat_reduce[d][i][j];
 		}
+		    idty[i][i]=1.0;
 		}
 		
 		info = LAPACKE_dgesv(LAPACK_ROW_MAJOR, npod, npod, *mat, npod, ipiv, *idty, npod);
