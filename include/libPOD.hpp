@@ -46,7 +46,8 @@ class POD {
 	    vector<vector<T>> ass_phi(vector<vector<vector<double>>> &);
 	    vector<vector<double>> project(vector<vector<double>> &);
 	    vector<vector<double>> project(vector<vector<vector<double>>> &);
-	    void reconstruct(vector<vector<double>> &, vector<T> &);
+	    void reconstruct(vector<vector<double>> &, vector<vector<double>> &);
+	    void reconstruct(vector<vector<double>> &, vector<vector<vector<double>>> &);
 
 };
 
@@ -61,12 +62,13 @@ class interface : public POD< T, interface<T> > {
 		interface(vector<T> &, int &, int &);
 		interface(vector<T> &, int &, int &, int &);		
 	    	void get_fields(int &, string, vector<T> &);
-	    	void get_input(vector<T> &, string);
-	    	void get_input(vector<vector<T>> &, string);
+	    	void get_input(vector<double> &, string);
+	    	void get_input(vector<vector<double>> &, string);
+	    	void get_input(vector<vector<vector<double>>> &, string);
 	    	void give_fields(int &, string, vector<T> &);
 	    	void give_output(vector<double> &, string);
-	    	void give_output(vector<T> &, string);
-	    	void give_output(vector<vector<T>> &, string);
+	    	void give_output(vector<vector<double>> &, string);
+	    	void give_output(vector<vector<vector<double>>> &, string);
 
 
 };
