@@ -7,13 +7,12 @@ T1 POD <T, T1>::job(){
 	return *static_cast<T1*>(this);
 }
 
-
 // ================================================================================== //
 // CALC MEAN	                                                                      //
 // ================================================================================== //
 
 template <class T, class T1>
-vector<T> POD<T, T1>::calc_mean(const bool &tf){
+void POD<T, T1>::calc_mean(const bool &tf){
 
     vector< T >	   snap;
     int fi = 0;
@@ -41,8 +40,6 @@ vector<T> POD<T, T1>::calc_mean(const bool &tf){
 
     dsize=mean.size();
 
-    return (mean); 
-
 }
 
 // ================================================================================== //
@@ -64,12 +61,10 @@ void POD<T, T1>::calc_modes(const bool &tf){
 	npod=job().nsnap-1;
     }
 
-
     job().get_fields(i0,"filter",filter);
     job().get_fields(i0,"volume",volume);
 
     if (tf == 1){
-
 
 	//solve eigenproblem
 	calc_coefficients();
@@ -92,12 +87,20 @@ void POD<T, T1>::calc_modes(const bool &tf){
 	    phi[pd][d]=mode[d];
 	}
 	}
+	/*if (MPI::COMM_WORLD.Get_rank()==0){
+	    job().get_input(coeff,"coefficients");
+	    int count=job().nsnap*npod*dsize;
+	    MPI::COMM_WORLD.Bcast(&coeff, count, MPI_DOUBLE, 0);
 
-	job().get_input(coeff,"coefficients");
-	job().get_input(lambda,"lambda");
+	    job().get_input(lambda,"lambda");
+	    count=npod*dsize;
+	    MPI::COMM_WORLD.Bcast(&lambda, count, MPI_DOUBLE, 0);
+	}*/
     }
 	
 }
+
+
 
 // ass_phi 2D ======================================================================= //
 
@@ -110,7 +113,7 @@ vector<vector<T>> POD <T , T1>::ass_phi(vector<vector<double>> &in){
 	mphi.resize(npod,vector<vector<double>>(dsize,vector<double>(in[0].size(),0.0)));
 
 	for (int i=0; i<job().nsnap; ++i){
-	    cout << "projecting snapshot " << i+1 << " of " << job().nsnap << endl;
+	    if (MPI::COMM_WORLD.Get_rank()==0){ cout << "projecting snapshot " << i+1 << " of " << job().nsnap << endl; }
 	    job().get_fields(i,"snap",s1);
 	    val=s1-mean;
 	    for (int j=0; j<npod; ++j){
@@ -136,7 +139,7 @@ vector<vector<T>> POD <T , T1>::ass_phi(vector<vector<vector<double>>> &in){
 	mphi.resize(npod,vector<vector<vector<double>>>(dsize,vector<vector<double>>(in[0].size(),vector<double>(in[0][0].size(),0.0))));
 
 	for (int i=0; i<job().nsnap; ++i){
-	    cout << "projecting snapshot " << i+1 << " of " << job().nsnap << endl;
+	    if (MPI::COMM_WORLD.Get_rank()==0){ cout << "projecting snapshot " << i+1 << " of " << job().nsnap << endl;}
 	    job().get_fields(i,"snap",s1);
 	    val=s1-mean;
 
@@ -158,49 +161,66 @@ vector<vector<T>> POD <T , T1>::ass_phi(vector<vector<vector<double>>> &in){
 template <class T, class T1>
 void POD <T , T1>::calc_coefficients(){
 	vector<vector<vector<double>>> Mcorr;
-	vector<vector<vector<double>>> Mcorr_reduce;
-		
+
 	lapack_int info, n;
+	n=job().nsnap;
 
 	double alambda[job().nsnap][1];
+	double blambda[dsize][job().nsnap];
+	double bcoeff[dsize][npod][job().nsnap];
 	double Marr[job().nsnap][job().nsnap];
+	double Marr_reduce[job().nsnap][job().nsnap];
 
 	lambda.resize(dsize, vector<double>(job().nsnap,0.0));
 	coeff.resize(dsize, vector<vector<double>>(npod, vector<double>(job().nsnap,0.0)));	
 
-
-	n=job().nsnap;
-
 	calc_correlation(Mcorr);
-	Mcorr_reduce=Mcorr;
+
+	int count=job().nsnap*job().nsnap;
 
 	for (int i=0; i<dsize; ++i){
-	    for (int k=0; k<Mcorr_reduce[i].size(); ++k){
-		for (int j=k; j<Mcorr_reduce[i].size(); ++j){
-		    Marr[k][j]=Mcorr_reduce[i][k][j];
-		    Marr[j][k]=Marr[k][j];
+	    for (int k=0; k<job().nsnap; ++k){
+	    for (int j=k; j<job().nsnap; ++j){
+		Marr[k][j]=Mcorr[i][k][j];
+		Marr[j][k]=Marr[k][j];
+	    }
+	    }
+
+	    MPI::COMM_WORLD.Reduce(&Marr, &Marr_reduce, count, MPI_DOUBLE, MPI::SUM, 0);
+
+	    if (MPI::COMM_WORLD.Get_rank()==0){
+		cout << "solving eigenproblem nr " << i+1 << endl;
+		info = LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', n, *Marr_reduce, n, *alambda);
+
+		for (int q=0; q<job().nsnap; ++q){
+		    blambda[i][q]=alambda[-q-1+job().nsnap][0];
 		}
-	    }
-	    cout << "solving eigenproblem nr " << i+1 << endl;
-	    info = LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', n, *Marr, n, *alambda);
-
-	    for (int q=0; q<job().nsnap; ++q){
-		lambda[i][q]=alambda[-q-1+job().nsnap][0];
-	    }
-
-	    for (int t=0; t<job().nsnap; ++t){
-	    for ( int m=0; m<npod; ++m){
-		
-		    Mcorr_reduce[i][t][job().nsnap-m-1]=Marr[t][job().nsnap-m-1];	
-		    coeff[i][m][t]= Mcorr_reduce[i][t][job().nsnap-m-1]*sqrt(abs(lambda[i][m]));
-	
-	    }
-	    }
-
+		for (int t=0; t<job().nsnap; ++t){
+		for (int m=0; m<npod; ++m){
+		    bcoeff[i][m][t] = Marr_reduce[t][job().nsnap-m-1]*sqrt(abs(blambda[i][m]));
+		}
+		}
+	   }
 	}
 
+	count=job().nsnap*dsize;
+	MPI::COMM_WORLD.Bcast(&blambda, count, MPI_DOUBLE, 0);
+	count=job().nsnap*npod*dsize;
+	MPI::COMM_WORLD.Bcast(&bcoeff, count, MPI_DOUBLE, 0);
+
+	for (int d=0; d<dsize; d++){
+	for (int n=0; n<job().nsnap; ++n){
+	    lambda[d][n]=blambda[d][n];
+	    for (int m=0; m<npod; ++m){
+		coeff[d][m][n]=bcoeff[d][m][n];
+	    } 
+	}
+	}
+
+    if (MPI::COMM_WORLD.Get_rank()==0){
 	job().give_output(coeff,"coefficients");
 	job().give_output(lambda,"lambda");
+    }
 
 }
 
@@ -216,7 +236,7 @@ void POD <T, T1>::calc_correlation(vector<vector<vector<double>>> &Mcorr){
 
 	for (int i=0; i<job().nsnap; ++i){
 
-	    cout << "row number " << i+1 << " of " << job().nsnap << endl;
+	    if (MPI::COMM_WORLD.Get_rank()==0){cout << "row number " << i+1 << " of " << job().nsnap << endl;}
 	    job().get_fields(i,"snap",snap1);
 	    snap1=snap1-mean;
 
@@ -289,18 +309,59 @@ template <class T, class T1>
 void POD<T, T1>::calc_projection_matrix(const bool &tf){
 
 	vector<vector<vector<double>>> proj_mat;
-	vector<vector<vector<double>>> proj_mat_reduce;
 	lapack_int info;
 	
+	double mat_reduce[npod][npod];
 	double mat[npod][npod];
 	double idty[npod][npod];
 	int ipiv[npod];
 
 	if (tf==1){
+	
+	    proj_mat=ass_proj_matrix(mean);
+	    int count=npod*npod;
+	    
+	    for (int d=0; d<dsize; ++d){
+
+		for (int i=0; i<npod; ++i){
+		for (int j=0; j<npod; ++j){
+		    mat[i][j]=proj_mat[d][i][j];
+		}
+		}
+
+	    	MPI::COMM_WORLD.Reduce(&mat, &mat_reduce, count, MPI_DOUBLE, MPI::SUM, 0);
+
+    	    	if (MPI::COMM_WORLD.Get_rank()==0){	    
+		    for (int i=0; i<npod; ++i){
+		    for (int j=0; j<npod; ++j){
+			idty[i][j]=0.0;
+		    }
+			idty[i][i]=1.0;
+		    }
+		
+		    info = LAPACKE_dgesv(LAPACK_ROW_MAJOR, npod, npod, *mat_reduce, npod, ipiv, *idty, npod);
+
+		    for (int i=0; i<npod; ++i){
+		    for (int j=0; j<npod; ++j){
+			proj_mat[d][i][j]=idty[i][j];
+		    }
+		    }
+
+		    job().give_output(proj_mat[d],"proj_matrix");
+		}
+	    }
+	    //MPI::COMM_WORLD.Bcast(&proj_mat, count, MPI_DOUBLE,0);
+	}
+
+/*	if (tf==1){
 
 	    proj_mat=ass_proj_matrix(mean);
+	    proj_mat_reduce.resize(dsize,vector<vector<double>>(npod,vector<double>(npod,0.0)));
 	    proj_mat_reduce=proj_mat;
-	    
+	    int count=npod*npod*dsize;
+	    MPI::COMM_WORLD.Reduce(&proj_mat, &proj_mat_reduce, count, MPI_DOUBLE, MPI::SUM, 0);
+
+    	if (MPI::COMM_WORLD.Get_rank()==0){	    
 	    for (int d=0; d<dsize; ++d){
 		for (int i=0; i<npod; ++i){
 		for (int j=0; j<npod; ++j){
@@ -325,8 +386,10 @@ void POD<T, T1>::calc_projection_matrix(const bool &tf){
 
 	    }
 	    
-
 	}
+	    MPI::COMM_WORLD.Bcast(&proj_mat, count, MPI_DOUBLE,0);
+	}
+*/
 
 }
 
@@ -413,9 +476,9 @@ template <class T, class T1>
 vector<vector<double>> POD<T, T1>::project(vector<vector<double>> &so){
 
 	vector<vector<double>> coeff_pod;
-	vector<vector<double>> coeff_myid;
 	coeff_pod.resize(dsize,vector<double>(npod,0.0));
-	coeff_myid.resize(dsize,vector<double>(npod,0.0));
+	double coeff_myid[dsize][npod];
+	double bcoeff_pod[dsize][npod];
 
 	for (int d=0; d<dsize; ++d){
 	for (int n=0; n<filter[0].size(); ++n)
@@ -428,7 +491,15 @@ vector<vector<double>> POD<T, T1>::project(vector<vector<double>> &so){
 	}	    
 	}
 
-	coeff_pod=coeff_myid;
+	int count=npod*dsize;
+	MPI::COMM_WORLD.Allreduce(&coeff_myid, &bcoeff_pod, count, MPI_DOUBLE, MPI::SUM);
+
+	for (int d=0; d<dsize; d++){
+	for (int n=0; n<filter[0].size(); ++n){
+	    coeff_pod[d][n]=bcoeff_pod[d][n];
+	}
+	}
+
 	return(coeff_pod);
 }
 
@@ -438,9 +509,9 @@ template <class T, class T1>
 vector<vector<double>> POD<T, T1>::project(vector<vector<vector<double>>> &so){
 
 	vector<vector<double>> coeff_pod;
-	vector<vector<double>> coeff_myid;
 	coeff_pod.resize(dsize,vector<double>(npod,0.0));
-	coeff_myid.resize(dsize,vector<double>(npod,0.0));
+	double coeff_myid[dsize][npod];
+	double bcoeff_pod[dsize][npod];
 
 	for (int d=0; d<dsize; ++d){
 	for (int n=0; n<filter[0].size(); ++n)
@@ -453,7 +524,15 @@ vector<vector<double>> POD<T, T1>::project(vector<vector<vector<double>>> &so){
 	}	    
 	}
 
-	coeff_pod=coeff_myid;
+	int count=npod*dsize;
+	MPI::COMM_WORLD.Allreduce(&coeff_myid, &coeff_pod, count, MPI_DOUBLE, MPI::SUM);
+
+	for (int d=0; d<dsize; d++){
+	for (int n=0; n<filter[0].size(); ++n){
+	    coeff_pod[d][n]=bcoeff_pod[d][n];
+	}
+	}
+
 	return(coeff_pod);
 }
 

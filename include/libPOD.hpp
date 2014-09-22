@@ -12,6 +12,7 @@
 # include <iostream>
 # include <algorithm>
 # include <lapacke.h>
+# include <mpi.h>
 
 // CC_lib
 # include "Operators.hpp"
@@ -29,7 +30,7 @@ class POD {
 	    vector<vector<double>> lambda;
 	    vector<vector<vector<double>>> coeff;
 	    vector<vector<T>> phi;
-	    vector<T> calc_mean(const bool &);
+	    void calc_mean(const bool &);
 	    void calc_modes(const bool &);
 	    void calc_projection_matrix(const bool &);
 	    void calc_reconstruction(const bool &);
@@ -48,6 +49,7 @@ class POD {
 	    vector<vector<double>> project(vector<vector<vector<double>>> &);
 	    void reconstruct(vector<vector<double>> &, vector<vector<double>> &);
 	    void reconstruct(vector<vector<double>> &, vector<vector<vector<double>>> &);
+
 
 };
 
